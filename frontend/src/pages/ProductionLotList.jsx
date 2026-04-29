@@ -1,18 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { Search, ArrowRight, Plus, ChevronLeft, Trash2, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Search, ArrowRight, Plus, Trash2, X } from 'lucide-react';
 import { db } from '../services/db';
 import { removeVietnameseTones } from '../utils/stringUtils';
 
 export default function ProductionLotList({ onNavigate }) {
   const [search, setSearch] = useState('');
   const [lots, setLots] = useState([]);
-
-  // Modal
   const [modal, setModal] = useState({ isOpen: false, type: '', title: '', message: '', onConfirm: null });
-  const closeModal = () => setModal(prev => ({ ...prev, isOpen: false }));
+
+  const closeModal = () => setModal((prev) => ({ ...prev, isOpen: false }));
 
   useEffect(() => {
-    setLots(db.getLots());
+    const syncLots = () => setLots(db.getLots());
+    syncLots();
+    window.addEventListener('focus', syncLots);
+    return () => window.removeEventListener('focus', syncLots);
   }, []);
 
   const handleDelete = (e, id) => {
@@ -30,18 +32,31 @@ export default function ProductionLotList({ onNavigate }) {
     });
   };
 
-  const filteredLots = lots.filter(lot => {
+  const filteredLots = lots.filter((lot) => {
     const term = removeVietnameseTones(search);
-    return removeVietnameseTones(lot.name).includes(term) ||
-      removeVietnameseTones(lot.id).includes(term);
+    return removeVietnameseTones(lot.name || '').includes(term) ||
+      removeVietnameseTones(lot.id || '').includes(term);
   });
+
+  const renderStatusBadge = (lotStatus) => {
+    if (lotStatus === 'Hoàn thành') {
+      return (
+        <span className="inline-block px-2 py-[2px] bg-green-50 text-success-green rounded-full text-[10px] font-bold uppercase tracking-wider">
+          Hoàn thành
+        </span>
+      );
+    }
+
+    return (
+      <span className="inline-block px-2 py-[2px] bg-badge-bg text-badge-text rounded-full text-[10px] font-bold uppercase tracking-wider">
+        Đang sản xuất
+      </span>
+    );
+  };
 
   return (
     <div className="w-full min-h-screen bg-warm-white text-notion-black font-sans">
-
-      <div className="max-w-[860px] mx-auto px-3 md:px-5 py-6 md:py-8">
-
-        {/* ── Title ── */}
+      <div className="max-w-[960px] mx-auto px-3 md:px-5 py-6 md:py-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6">
           <div>
             <h1 className="text-[28px] sm:text-[32px] font-bold tracking-[-1px] leading-tight">
@@ -61,58 +76,49 @@ export default function ProductionLotList({ onNavigate }) {
           </div>
         </div>
 
-        {/* ── Search ── */}
         <div className="flex mb-5">
           <div className="relative flex-1">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-warm-gray-300" />
             <input
               type="text"
-              placeholder="Tìm kiếm theo mã, hoặc tên lệnh..."
+              placeholder="Tìm kiếm theo mã hoặc tên lệnh..."
               className="w-full bg-notion-white border border-whisper rounded-[6px] pl-8 pr-3 py-[7px] text-[13px] focus:outline-none focus:ring-1 focus:ring-notion-blue/30 focus:border-notion-blue transition"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
             />
           </div>
         </div>
 
-        {/* ── Table ── */}
         <div className="bg-notion-white border border-whisper rounded-[8px] shadow-card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[500px] text-[13px]">
+            <table className="w-full min-w-[700px] text-[13px]">
               <thead className="text-[11px] uppercase text-warm-gray-400 tracking-[0.5px] bg-warm-white border-b border-whisper">
                 <tr>
-                  <th className="px-4 py-2.5 text-left font-semibold w-1/4">Mã</th>
-                  <th className="px-4 py-2.5 text-left font-semibold w-2/4">Tên lệnh</th>
-                  <th className="px-4 py-2.5 text-left font-semibold w-1/4">Ngày</th>
+                  <th className="px-4 py-2.5 text-left font-semibold w-[18%]">Mã</th>
+                  <th className="px-4 py-2.5 text-left font-semibold w-[36%]">Tên lệnh</th>
+                  <th className="px-4 py-2.5 text-left font-semibold w-[20%]">Trạng thái</th>
+                  <th className="px-4 py-2.5 text-left font-semibold w-[18%]">Ngày</th>
                   <th className="px-4 py-2.5 w-8"></th>
                 </tr>
               </thead>
               <tbody>
                 {filteredLots.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="px-4 py-8 text-center text-warm-gray-300 text-[13px]">
+                    <td colSpan="5" className="px-4 py-8 text-center text-warm-gray-300 text-[13px]">
                       Không tìm thấy lệnh sản xuất nào.
                     </td>
                   </tr>
                 ) : (
-                  filteredLots.map(lot => (
+                  filteredLots.map((lot) => (
                     <tr
                       key={lot.id}
                       className="border-b border-whisper last:border-0 hover:bg-warm-white/60 transition cursor-pointer"
                       onClick={() => onNavigate('lot-detail', { id: lot.id })}
                     >
                       <td className="px-4 py-3 font-semibold">{lot.id}</td>
-                      <td className="px-4 py-3">
-                        {lot.name}
-                        {lot.status === 'Đang sản xuất' && (
-                          <span className="ml-1.5 inline-block px-1.5 py-[1px] bg-badge-bg text-badge-text rounded-full text-[10px] font-bold uppercase tracking-wider">
-                            Active
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-warm-gray-500 text-[12px]">
-                        {lot.date}
-                      </td>
+                      <td className="px-4 py-3">{lot.name}</td>
+                      <td className="px-4 py-3">{renderStatusBadge(lot.status)}</td>
+                      <td className="px-4 py-3 text-warm-gray-500 text-[12px]">{lot.date}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button onClick={(e) => handleDelete(e, lot.id)} className="text-warm-gray-300 hover:text-red-500 transition p-1" title="Xoá lệnh">
@@ -128,10 +134,8 @@ export default function ProductionLotList({ onNavigate }) {
             </table>
           </div>
         </div>
-
       </div>
 
-      {/* ── Modal Popup ── */}
       {modal.isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -164,7 +168,6 @@ export default function ProductionLotList({ onNavigate }) {
           </div>
         </div>
       )}
-
     </div>
   );
 }

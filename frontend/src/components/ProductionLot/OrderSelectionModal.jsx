@@ -85,7 +85,7 @@ export default function OrderSelectionModal({
                       <div className="flex-1 min-w-0 flex flex-col lg:flex-row lg:items-center gap-1 lg:gap-2">
                         <div className="flex items-center gap-2">
                           <span className="shrink-0 text-[9px] font-bold px-1.5 py-[2px] rounded bg-purple-100 text-purple-700">ĐƠN HÀNG</span>
-                          <span className="font-bold text-gray-800 text-[14px] truncate">{order.name}</span>
+                          <span className="font-bold text-gray-800 text-[14px] truncate">{order.id}</span>
                         </div>
                         <span className="text-[12px] text-gray-500 font-medium whitespace-nowrap">({order.products.length} sản phẩm)</span>
                       </div>
@@ -114,7 +114,7 @@ export default function OrderSelectionModal({
                               <div className="flex-1 min-w-0 flex flex-col lg:flex-row lg:items-center gap-1 lg:gap-2">
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-gray-300 hidden lg:inline">└─</span>
-                                  <span className="font-semibold text-[13px] text-gray-800 truncate">{product.name}</span>
+                                  <span className="font-semibold text-[13px] text-gray-800 truncate">{product.id} - {product.name}</span>
                                 </div>
                               </div>
                               <div className="text-right shrink-0 flex items-center gap-2 sm:gap-4">

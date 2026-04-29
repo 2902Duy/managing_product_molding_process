@@ -3,17 +3,24 @@ import { ClipboardList, Plus, Trash2, ChevronDown, ChevronRight, PackageSearch }
 
 export default function TargetProductTable({
   selectedTargetProducts,
+  disabled = false,
   onChangeProductQuantity,
   onRemoveProduct,
   onOpenOrderModal
 }) {
   const [expandedProducts, setExpandedProducts] = useState({});
+  const [expandedOrders, setExpandedOrders] = useState({});
 
   const handleToggleProductExpand = (productId) => {
-    setExpandedProducts(prev => ({ ...prev, [productId]: !prev[productId] }));
+    setExpandedProducts((prev) => ({ ...prev, [productId]: !prev[productId] }));
   };
 
-  // Group selected products by Order
+  const handleToggleOrderExpand = (orderId) => {
+    setExpandedOrders((prev) => ({ ...prev, [orderId]: prev[orderId] === false ? true : false }));
+  };
+
+  const isOrderExpanded = (orderId) => expandedOrders[orderId] !== false;
+
   const groupedOrders = selectedTargetProducts.reduce((acc, product) => {
     const orderId = product.orderId || 'UNKNOWN';
     const orderName = product.orderName || 'Sản phẩm tự do';
@@ -24,8 +31,6 @@ export default function TargetProductTable({
 
   const orderGroups = Object.values(groupedOrders);
 
-
-
   return (
     <div className="bg-white border border-whisper rounded-[8px] shadow-sm mb-4 overflow-hidden">
       <div className="px-4 py-3 border-b border-whisper bg-gray-50 flex justify-between items-center">
@@ -35,7 +40,8 @@ export default function TargetProductTable({
         </h3>
         <button
           onClick={onOpenOrderModal}
-          className="flex items-center gap-1 text-[13px] font-medium text-white bg-notion-blue hover:bg-notion-blue-hover transition px-3 py-1.5 rounded-md shadow-sm"
+          disabled={disabled}
+          className="flex items-center gap-1 text-[13px] font-medium text-white bg-notion-blue hover:bg-notion-blue-hover transition px-3 py-1.5 rounded-md shadow-sm disabled:bg-gray-300 disabled:hover:bg-gray-300 disabled:cursor-not-allowed"
         >
           <Plus size={14} /> Thêm đơn hàng
         </button>
@@ -50,57 +56,68 @@ export default function TargetProductTable({
           <table className="w-full text-left text-[13px] border-collapse table-fixed">
             <thead className="text-[11px] uppercase text-warm-gray-400 tracking-[0.5px] border-b border-whisper bg-warm-white">
               <tr>
-                <th className="px-4 py-2.5 font-semibold w-[8%] border-r border-whisper text-center">STT</th>
-                <th className="px-4 py-2.5 font-semibold w-[52%] border-r border-whisper">Mã đơn hàng / Sản phẩm</th>
+                <th className="px-4 py-2.5 font-semibold w-[20%] border-r border-whisper">Mã đơn hàng / Sản phẩm</th>
+                <th className="px-4 py-2.5 font-semibold w-[40%] border-r border-whisper">Tên Sản phẩm</th>
                 <th className="px-4 py-2.5 font-semibold text-center w-[25%] border-r border-whisper">Số lượng Sản xuất</th>
                 <th className="px-2 py-2.5 w-[15%] text-center"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-whisper">
-              {orderGroups.map((group, gIdx) => (
+              {orderGroups.map((group) => (
                 <React.Fragment key={group.id}>
-                  {/* Level 1: Order Row */}
-                  <tr className="hover:bg-warm-white/60 transition group bg-warm-white/30 border-b border-whisper">
-                    <td className="px-4 py-2 text-center font-bold text-warm-gray-400 border-r border-whisper">{gIdx + 1}</td>
-                    <td colSpan={3} className="px-4 py-2 font-bold text-notion-black flex items-center gap-2">
-                      <span className="shrink-0 text-[10px] font-bold px-1.5 py-[2px] rounded bg-purple-100 text-purple-700">ID</span>
-                      {group.name}
+                  <tr
+                    className="hover:bg-warm-white/60 transition group cursor-pointer bg-warm-white/30 border-b border-whisper"
+                    onClick={() => handleToggleOrderExpand(group.id)}
+                  >
+                    <td colSpan={2} className="px-4 py-2 font-bold text-notion-black border-r border-whisper">
+                      <div className="flex items-center gap-2">
+                        <button type="button" className="text-warm-gray-400 hover:text-notion-blue w-5 h-5 flex items-center justify-center rounded hover:bg-black/5">
+                          {isOrderExpanded(group.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                        <span className="shrink-0 text-[10px] font-bold px-1.5 py-[2px] rounded bg-purple-100 text-purple-700">Đơn hàng</span>
+                        {group.id}
+                      </div>
                     </td>
+                    <td colSpan={2} className="px-4 py-2 border-r border-whisper bg-stripes-light"></td>
                   </tr>
 
-                  {/* Level 2: Product Rows */}
-                  {group.products.map((product, pIdx) => {
+                  {isOrderExpanded(group.id) && group.products.map((product) => {
                     const isExpanded = expandedProducts[product.id];
                     const prodQty = Number(product.quantity_produce) || 0;
 
                     return (
                       <React.Fragment key={product.id}>
                         <tr className="hover:bg-warm-white/40 transition bg-white group border-b border-whisper">
-                          <td className="px-4 py-2 text-center text-warm-gray-400 text-[11px] border-r border-whisper">{gIdx + 1}.{pIdx + 1}</td>
                           <td className="px-4 py-2 border-r border-whisper">
                             <div className="flex items-center gap-2">
                               <button
+                                type="button"
                                 onClick={() => handleToggleProductExpand(product.id)}
                                 className="text-warm-gray-400 hover:text-notion-blue w-5 h-5 flex items-center justify-center rounded hover:bg-black/5"
                               >
                                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                               </button>
-                              <span className="font-semibold text-gray-800">{product.name}</span>
+                              <span className="font-semibold text-gray-800">{product.id}</span>
                             </div>
+                          </td>
+                          <td className="px-4 py-2 border-r border-whisper font-semibold text-gray-800">
+                            {product.name}
                           </td>
                           <td className="p-0 border-r border-whisper bg-blue-50/20">
                             <input
                               type="number"
                               min="0"
+                              disabled={disabled}
                               value={product.quantity_produce}
                               onChange={(e) => onChangeProductQuantity(product.id, e.target.value)}
-                              className="w-full h-[36px] bg-transparent text-[13px] text-center font-semibold text-blue-600 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-notion-blue"
+                              className="w-full h-[36px] bg-transparent text-[13px] text-center font-semibold text-blue-600 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-notion-blue disabled:bg-gray-50 disabled:text-warm-gray-400 disabled:cursor-not-allowed"
                             />
                           </td>
                           <td className="p-0 text-center">
                             <button
                               onClick={() => onRemoveProduct(product.id)}
-                              className="text-warm-gray-300 hover:text-red-500 transition w-full h-[36px] flex items-center justify-center"
+                              disabled={disabled}
+                              className="text-warm-gray-300 hover:text-red-500 transition w-full h-[36px] flex items-center justify-center disabled:hover:text-warm-gray-300 disabled:cursor-not-allowed"
                               title="Xoá sản phẩm"
                             >
                               <Trash2 size={15} />
@@ -108,11 +125,9 @@ export default function TargetProductTable({
                           </td>
                         </tr>
 
-                        {/* Level 3: Parts Rows */}
                         {isExpanded && product.items && product.items.length > 0 && (
                           <tr className="bg-gray-50/50 border-b border-whisper">
-                            <td className="border-r border-whisper"></td>
-                            <td colSpan={3} className="px-4 py-3">
+                            <td colSpan={4} className="px-4 py-3">
                               <div className="bg-white border border-whisper rounded-lg p-3 ml-[28px] shadow-sm">
                                 <div className="text-[11px] font-bold text-gray-500 uppercase mb-2 flex items-center gap-1.5">
                                   <PackageSearch size={14} /> Quy cách chi tiết phôi cần xẻ
@@ -127,7 +142,7 @@ export default function TargetProductTable({
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-gray-100">
-                                    {product.items.map(part => {
+                                    {product.items.map((part) => {
                                       const baseQty = Number(part.base_quantity) || 0;
                                       const totalQty = baseQty * prodQty;
                                       return (
