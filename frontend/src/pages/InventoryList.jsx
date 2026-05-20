@@ -1,15 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { Search, ChevronLeft, Package, Plus, Archive, Layers, X, ArrowLeftRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Package, Archive, Layers, ArrowLeftRight } from 'lucide-react';
 import { db } from '../services/db';
 import { removeVietnameseTones } from '../utils/stringUtils';
 
-export default function InventoryList({ onNavigate }) {
+export default function InventoryList() {
   const [inventory, setInventory] = useState([]);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('ALL'); // ALL, RAW, SEMIFINISHED, SURPLUS
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setInventory(db.getInventory());
+    let active = true;
+    const doLoad = async () => {
+      setLoading(true);
+      const data = await db.getInventory();
+      if (active) {
+        setInventory(data || []);
+        setLoading(false);
+      }
+    };
+    doLoad();
+    return () => { active = false; };
   }, []);
 
   const filteredInventory = inventory.filter(item => {
@@ -18,7 +29,7 @@ export default function InventoryList({ onNavigate }) {
     const matchesSearch =
       removeVietnameseTones(item.name || '').includes(term) ||
       removeVietnameseTones(item.id || '').includes(term) ||
-      removeVietnameseTones(item.batchId || '').includes(term);
+      removeVietnameseTones(item.batchId || item.batch_id || '').includes(term);
     return matchesTab && matchesSearch;
   });
 
@@ -129,7 +140,13 @@ export default function InventoryList({ onNavigate }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-whisper">
-                {filteredInventory.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan="6" className="px-4 py-8 text-center text-warm-gray-300 text-[13px]">
+                      Đang tải...
+                    </td>
+                  </tr>
+                ) : filteredInventory.length === 0 ? (
                   <tr>
                     <td colSpan="6" className="px-4 py-8 text-center text-warm-gray-300 text-[13px]">
                       Không tìm thấy phôi gỗ nào phù hợp.
@@ -157,9 +174,9 @@ export default function InventoryList({ onNavigate }) {
                         {Number(item.volume).toFixed(4)}
                       </td>
                       <td className="px-4 py-3 text-warm-gray-500">
-                        {item.batchId ? (
+                        {(item.batchId || item.batch_id) ? (
                           <span className="flex items-center gap-1.5">
-                            <ArrowLeftRight size={13} className="text-blue-400" /> Nhập lô: {item.batchId}
+                            <ArrowLeftRight size={13} className="text-blue-400" /> Nhập lô: {item.batchId || item.batch_id}
                           </span>
                         ) : item.source_lot_id ? (
                           <span className="flex items-center gap-1.5">

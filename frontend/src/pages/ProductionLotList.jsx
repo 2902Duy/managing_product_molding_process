@@ -1,20 +1,39 @@
-import React, { useEffect, useState } from 'react';
-import { Search, ArrowRight, Plus, Trash2, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Search, Plus, Trash2, X } from 'lucide-react';
 import { db } from '../services/db';
 import { removeVietnameseTones } from '../utils/stringUtils';
 
 export default function ProductionLotList({ onNavigate }) {
   const [search, setSearch] = useState('');
   const [lots, setLots] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState({ isOpen: false, type: '', title: '', message: '', onConfirm: null });
 
   const closeModal = () => setModal((prev) => ({ ...prev, isOpen: false }));
 
+  const loadLots = async () => {
+    setLoading(true);
+    const data = await db.getLots();
+    setLots(data || []);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const syncLots = () => setLots(db.getLots());
-    syncLots();
-    window.addEventListener('focus', syncLots);
-    return () => window.removeEventListener('focus', syncLots);
+    let active = true;
+    const doLoad = async () => {
+      setLoading(true);
+      const data = await db.getLots();
+      if (active) {
+        setLots(data || []);
+        setLoading(false);
+      }
+    };
+    doLoad();
+    window.addEventListener('focus', loadLots);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', loadLots);
+    };
   }, []);
 
   const handleDelete = (e, id) => {
@@ -24,9 +43,9 @@ export default function ProductionLotList({ onNavigate }) {
       type: 'confirm',
       title: 'Xác nhận xoá',
       message: 'Bạn có chắc muốn xoá lệnh sản xuất này không? Hành động này không thể hoàn tác.',
-      onConfirm: () => {
-        db.deleteLot(id);
-        setLots(db.getLots());
+      onConfirm: async () => {
+        await db.deleteLot(id);
+        await loadLots();
         closeModal();
       }
     });
@@ -102,7 +121,13 @@ export default function ProductionLotList({ onNavigate }) {
                 </tr>
               </thead>
               <tbody>
-                {filteredLots.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan="5" className="px-4 py-8 text-center text-warm-gray-300 text-[13px]">
+                      Đang tải...
+                    </td>
+                  </tr>
+                ) : filteredLots.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="px-4 py-8 text-center text-warm-gray-300 text-[13px]">
                       Không tìm thấy lệnh sản xuất nào.
@@ -115,17 +140,17 @@ export default function ProductionLotList({ onNavigate }) {
                       className="border-b border-whisper last:border-0 hover:bg-warm-white/60 transition cursor-pointer"
                       onClick={() => onNavigate('lot-detail', { id: lot.id })}
                     >
-                      <td className="px-4 py-3 font-semibold">{lot.id}</td>
-                      <td className="px-4 py-3">{lot.name}</td>
+                      <td className="px-4 py-3 font-mono text-[12px] text-warm-gray-500">{lot.id}</td>
+                      <td className="px-4 py-3 font-medium">{lot.name}</td>
                       <td className="px-4 py-3">{renderStatusBadge(lot.status)}</td>
-                      <td className="px-4 py-3 text-warm-gray-500 text-[12px]">{lot.date}</td>
+                      <td className="px-4 py-3 text-warm-gray-400">{lot.created_date || lot.date}</td>
                       <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={(e) => handleDelete(e, lot.id)} className="text-warm-gray-300 hover:text-red-500 transition p-1" title="Xoá lệnh">
-                            <Trash2 size={14} />
-                          </button>
-                          <ArrowRight size={14} className="text-warm-gray-300" />
-                        </div>
+                        <button
+                          onClick={(e) => handleDelete(e, lot.id)}
+                          className="text-warm-gray-300 hover:text-red-500 transition p-1"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -138,7 +163,7 @@ export default function ProductionLotList({ onNavigate }) {
 
       {modal.isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-[400px] overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <h3 className="font-semibold text-gray-800">{modal.title}</h3>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 transition"><X size={18} /></button>

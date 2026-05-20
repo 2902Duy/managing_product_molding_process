@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Save, Check, CheckCircle, X, Lock } from 'lucide-react';
 import { db } from '../services/db';
 import { removeVietnameseTones } from '../utils/stringUtils';
@@ -40,32 +40,52 @@ export default function ProductionLotDetail({ onNavigate, lotId }) {
   const [modal, setModal] = useState({ isOpen: false, type: '', title: '', message: '', onConfirm: null });
   const [showOutputValidation, setShowOutputValidation] = useState(false);
   const [outputs, setOutputs] = useState([createOutputRow()]);
+  const [loading, setLoading] = useState(true);
 
   const closeModal = () => setModal((prev) => ({ ...prev, isOpen: false }));
   const isCompleted = status === COMPLETED_STATUS;
 
   useEffect(() => {
-    setAvailableInventory(db.getInventory());
-    setOrders(db.getOrders() || []);
+    const loadData = async () => {
+      setLoading(true);
+      const [inv, ordersData] = await Promise.all([
+        db.getInventory(),
+        db.getOrders(),
+      ]);
+      setAvailableInventory(inv || []);
+      setOrders(ordersData || []);
 
-    if (!lotId) {
-      setLotName('Lệnh SX Mới');
-      return;
-    }
+      if (!lotId) {
+        setLotName('Lệnh SX Mới');
+        setLoading(false);
+        return;
+      }
 
-    const lot = db.getLot(lotId);
-    if (!lot) return;
+      const lot = await db.getLot(lotId);
+      if (!lot) {
+        setLoading(false);
+        return;
+      }
 
-    setLotName(lot.name || '');
-    setStatus(lot.status || ACTIVE_STATUS);
-    setDescription(lot.description || '');
-    setSelectedTargetProducts(lot.targetProducts || []);
-    setSelectedInputs((lot.inputs || []).map((item) => ({
-      ...item,
-      quantity_used: item.quantity_used ?? item.quantity,
-      volume_used: item.volume_used ?? item.volume
-    })));
-    setOutputs(lot.outputs && lot.outputs.length > 0 ? lot.outputs : [createOutputRow()]);
+      setLotName(lot.name || '');
+      setStatus(lot.status || ACTIVE_STATUS);
+      setDescription(lot.description || '');
+
+      const lotData = lot.data || {};
+      setSelectedTargetProducts(lotData.targetProducts || lot.targetProducts || []);
+      setSelectedInputs((lotData.inputs || lot.inputs || []).map((item) => ({
+        ...item,
+        quantity_used: item.quantity_used ?? item.quantity,
+        volume_used: item.volume_used ?? item.volume
+      })));
+      setOutputs(
+        (lotData.outputs || lot.outputs || []).length > 0
+          ? (lotData.outputs || lot.outputs)
+          : [createOutputRow()]
+      );
+      setLoading(false);
+    };
+    loadData();
   }, [lotId]);
 
   const handleOpenOrderModal = () => {
@@ -148,7 +168,7 @@ export default function ProductionLotDetail({ onNavigate, lotId }) {
   };
 
   const handleRemoveInputBatch = (batchId) => {
-    setSelectedInputs(selectedInputs.filter((item) => (item.batchId || item.id) !== batchId));
+    setSelectedInputs(selectedInputs.filter((item) => (item.batchId || item.batch_id || item.id) !== batchId));
   };
 
   const handleChangeInputQuantity = (id, newQty) => {
@@ -282,7 +302,7 @@ export default function ProductionLotDetail({ onNavigate, lotId }) {
     return null;
   };
 
-  const saveLotToDb = (newStatus) => {
+  const saveLotToDb = async (newStatus) => {
     const finalLotId = lotId || createLotId();
     const lot = {
       id: finalLotId,
@@ -295,14 +315,14 @@ export default function ProductionLotDetail({ onNavigate, lotId }) {
       outputs
     };
 
-    db.saveLot(lot);
+    await db.saveLot(lot);
     setStatus(newStatus);
     return finalLotId;
   };
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     if (isCompleted) return;
-    saveLotToDb(ACTIVE_STATUS);
+    await saveLotToDb(ACTIVE_STATUS);
     setShowOutputValidation(false);
     setModal({
       isOpen: true,
@@ -333,8 +353,8 @@ export default function ProductionLotDetail({ onNavigate, lotId }) {
       type: 'confirm',
       title: 'Xác nhận hoàn tất',
       message: 'Xác nhận hoàn thành sản xuất? Thành phẩm và phôi dư sẽ được tự động nhập kho.',
-      onConfirm: () => {
-        const finalLotId = saveLotToDb(COMPLETED_STATUS);
+      onConfirm: async () => {
+        const finalLotId = await saveLotToDb(COMPLETED_STATUS);
         const newInventoryItems = [];
 
         outputs.forEach((entry) => {
@@ -343,14 +363,14 @@ export default function ProductionLotDetail({ onNavigate, lotId }) {
           if (actualQty <= 0 && actualVol <= 0) return;
 
           let itemType = 'SEMIFINISHED';
-          let itemStatus = 'Sẵn sàng';
+          let itemStatus = 'AVAILABLE';
 
           if (entry.status === 'Phôi dư') {
             itemType = 'SURPLUS';
-            itemStatus = 'Tồn kho';
+            itemStatus = 'AVAILABLE';
           } else if (entry.status === 'Phế phẩm') {
             itemType = 'WASTE';
-            itemStatus = 'Loại bỏ';
+            itemStatus = 'USED';
           }
 
           newInventoryItems.push({
@@ -368,7 +388,7 @@ export default function ProductionLotDetail({ onNavigate, lotId }) {
 
         if (selectedInputs.length > 0) {
           const idsToRemove = selectedInputs.map((item) => item.id);
-          db.removeInventory(idsToRemove);
+          await db.removeInventory(idsToRemove);
 
           const partials = selectedInputs.filter((item) => {
             const originalQty = Number(item.quantity) || 0;
@@ -384,11 +404,9 @@ export default function ProductionLotDetail({ onNavigate, lotId }) {
             const originalVol = Number(item.volume) || 0;
             const usedVol = Number(item.volume_used) || 0;
 
-            let remainingQty = 0;
-            let remainingVol = 0;
-
+            const remainingQty = originalQty > 0 ? originalQty - usedQty : 0;
+            let remainingVol;
             if (originalQty > 0) {
-              remainingQty = originalQty - usedQty;
               const l = parseFloat(item.length) || 0;
               const w = parseFloat(item.width) || 0;
               const t = parseFloat(item.thickness) || 0;
@@ -411,7 +429,7 @@ export default function ProductionLotDetail({ onNavigate, lotId }) {
         }
 
         if (newInventoryItems.length > 0) {
-          db.addInventory(newInventoryItems);
+          await db.addInventory(newInventoryItems);
         }
 
         setModal({
@@ -430,18 +448,26 @@ export default function ProductionLotDetail({ onNavigate, lotId }) {
     const term = removeVietnameseTones(invSearch);
     const matchesSearch =
       removeVietnameseTones(item.name || '').includes(term) ||
-      removeVietnameseTones(item.batchId || '').includes(term);
+      removeVietnameseTones(item.batchId || item.batch_id || '').includes(term);
     return matchesTab && matchesSearch;
   });
 
   const groupedInventory = Object.values(filteredInventory.reduce((acc, item) => {
-    const batchId = item.batchId || item.id;
+    const batchId = item.batchId || item.batch_id || item.id;
     if (!acc[batchId]) {
       acc[batchId] = { batchId, type: item.type, items: [] };
     }
     acc[batchId].items.push(item);
     return acc;
   }, {}));
+
+  if (loading) {
+    return (
+      <div className="w-full min-h-screen bg-warm-white flex items-center justify-center">
+        <p className="text-warm-gray-400">Đang tải...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-h-screen bg-warm-white text-notion-black font-sans pb-24">
